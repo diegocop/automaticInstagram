@@ -377,5 +377,5 @@ with sync_playwright() as p:
             time.sleep(3600)            
             cliques =0
                 
-    # Aqui o navegador vai continuar aberto
+    # Aqui o navegador vai continuar aberto testeeee
     input("Pressione ENTER para fechar...")
