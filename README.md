@@ -1,3 +1,0 @@
-# automaticInstagram
-
-automatica clicar seguidores
