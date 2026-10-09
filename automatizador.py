@@ -1,34 +1,59 @@
+import os
 import time
 import random
+import threading
 from datetime import datetime
 from playwright.sync_api import sync_playwright
 
-#playwright codegen https://www.instagram.com/diegocop/
-def senhaUsuario():
+# Função extra chamada a cada linha de log (a interface usa para mostrar o log na tela)
+ouvinteLog = None
 
-    usuario = "diegoinfocop"
-    senha = "Ihateyou5338@"
+
+class Parado(Exception):
+    """Lançada quando o usuário aperta "Parar" na interface"""
+
+
+#playwright codegen https://www.instagram.com/diegocop/
+def senhaUsuario(page, usuario, senha, parar):
 
     # Abre a página de login do Instagram
     page.goto("https://www.instagram.com/accounts/login/")
 
-    # Espera os campos aparecerem
-    page.wait_for_selector("input[name='username']")
-    page.wait_for_selector("input[name='password']")
+    if usuario and senha:
+        # O Instagram já usou name='username'/'password' e hoje usa 'email'/'pass'
+        campoUsuario = "input[name='email'], input[name='username']"
+        campoSenha = "input[name='pass'], input[name='password']"
 
-    # Preenche usuário e senha
-    page.fill("input[name='username']", usuario)
+        # Espera os campos aparecerem
+        page.wait_for_selector(campoUsuario)
+        page.wait_for_selector(campoSenha)
 
-    time.sleep(1000)
-    page.fill("input[name='password']", senha)
+        # Preenche usuário e senha
+        page.fill(campoUsuario, usuario)
 
-    time.sleep(1000)
+        time.sleep(1)
+        page.fill(campoSenha, senha)
 
-    # Clica no botão de login
-    page.click("button[type='submit']")
+        time.sleep(1)
 
-    # Espera alguns segundos para carregar a página
-    time.sleep(1000)
+        # Aperta Enter para entrar
+        page.press(campoSenha, "Enter")
+    else:
+        # Sem credenciais: espera o login manual na janela do navegador
+        log("Faça o login manualmente na janela do navegador...")
+
+    # Espera o login terminar (pode pedir código 2FA, sem limite de tempo)
+    while not estaLogado(page):
+        if parar.is_set():
+            raise Parado()
+        page.wait_for_timeout(3000)
+    log("✅ Login feito.")
+    page.wait_for_timeout(5000)
+
+
+def estaLogado(page):
+    """O cookie 'sessionid' só existe quando a conta está logada"""
+    return any(c["name"] == "sessionid" for c in page.context.cookies("https://www.instagram.com"))
 
 
 def clicar_com_mouse(page, locator):
@@ -42,11 +67,22 @@ def clicar_com_mouse(page, locator):
         print("Clique realizado!")
         return True
     return False
-def esperarTempo():
-     # tempo aleatório entre 2s e 7s (2000ms a 7000ms)
-        espera = random.randint(4000, 7000)
-        print(f"Esperando {espera/1000:.2f} segundos...")
-        page.wait_for_timeout(espera)
+
+
+def esperar(page, segundos, parar):
+    """Espera em pedaços de 1s para o botão "Parar" responder rápido"""
+    fim = time.time() + segundos
+    while time.time() < fim:
+        if parar.is_set():
+            raise Parado()
+        page.wait_for_timeout(min(1000, (fim - time.time()) * 1000))
+
+
+def esperarTempo(page, config, parar):
+    # tempo aleatório entre esperaMin e esperaMax segundos
+    espera = random.uniform(config["esperaMin"], config["esperaMax"])
+    print(f"Esperando {espera:.2f} segundos...")
+    esperar(page, espera, parar)
 
 def log(mensagem, arquivoLog="log.txt"):
   # Pega a hora atual no formato: 2025-09-10 14:30:15
@@ -57,6 +93,8 @@ def log(mensagem, arquivoLog="log.txt"):
   with open(arquivoLog, "a", encoding="utf-8") as f:
     f.write(linha)
   print(f"[{agora}] {mensagem}\n")
+  if ouvinteLog:
+    ouvinteLog(linha)
 
 url = [
     "https://www.instagram.com/centralcaprichoso/",
@@ -235,147 +273,142 @@ url = [
 ]
 '''
 
-urlAtual =""
-with sync_playwright() as p:
-    browser = p.chromium.launch_persistent_context(
-        user_data_dir="userdata",
-        headless=False
 
-   
-    )
-    page = browser.new_page()
-    log("\n\n***INÍCIO DO PROGRAMA\n\n***")
-    # Limite de 24 por hora
-    limite = 25
-    cliques = 0
+# Configuração usada quando o script roda sem a interface
+CONFIG_PADRAO = {
+    "usuario": os.environ.get("IG_USUARIO", ""),
+    "senha": os.environ.get("IG_SENHA", ""),
+    "urls": url,
+    "limite": 15,          # seguidas por ciclo
+    "pausaMinutos": 60,    # pausa depois de atingir o limite
+    "esperaMin": 4,        # espera aleatória entre ações (segundos)
+    "esperaMax": 15,
+    "headless": False,
+}
 
-    #senhaUsuario()  
-    
-    
 
-    while True:
-        
-        log("while True:")
-        page.goto("https://www.instagram.com")
-    
-        esperarTempo()
+def rolarNoMeio(page, distancias):
+    # Pega o tamanho da viewport (janela visível)
+    viewport = page.viewport_size
+    center_x = viewport["width"] / 2
+    center_y = viewport["height"] / 2
+    # Move o mouse para o centro da tela
+    page.mouse.move(center_x, center_y)
+    page.wait_for_timeout(1000)
+    for d in distancias:
+        page.mouse.wheel(0, d)
+        page.wait_for_timeout(1000)
+    log("✅ Scroll realizado com o mouse no meio da tela.")
 
-        urlAtual = random.choice(url)
-        page.goto(urlAtual)
 
-        log(f"o perfil visitado: {urlAtual}")
+def executar(config, parar=None):
+    """Roda o bot até o usuário apertar "Parar" (parar.set())"""
+    parar = parar or threading.Event()
+    urls = [u.strip().rstrip("/") + "/" for u in config["urls"] if u.strip()]
+    if not urls:
+        log("⚠️ Nenhuma URL configurada.")
+        return
+    limite = config["limite"]
 
-        esperarTempo()
+    with sync_playwright() as p:
+        browser = p.chromium.launch_persistent_context(
+            user_data_dir="userdata",
+            headless=config["headless"],
+            # O bot procura os textos em português ("Seguir")
+            locale="pt-BR"
+        )
+        page = browser.new_page()
+        log("\n\n***INÍCIO DO PROGRAMA\n\n***")
+        cliques = 0
+        urlAtual = ""
 
-        page.goto(urlAtual+"followers/")
+        try:
+            if not estaLogado(page):
+                log("Sessão não encontrada, fazendo login...")
+                senhaUsuario(page, config["usuario"], config["senha"], parar)
 
-        page.wait_for_selector("span:has-text('seguidores')")
+            while not parar.is_set():
 
-        # pega a posição do botão
-        botao = page.locator("span:has-text('seguidores')")
+                # Se atingiu o limite, faz a pausa
+                if cliques >= limite:
+                    log(f"⚠️ Limite atingido. Esperando {config['pausaMinutos']} minutos...")
+                    esperar(page, config["pausaMinutos"] * 60, parar)
+                    cliques = 0
+                    continue
 
-        clicar_com_mouse(page, botao)
-        
-        esperarTempo()
-        # Se ainda não atingiu o limite, executa
-        if cliques < limite:
-            log(f"cliques < limite:{cliques}<{limite}")    
-            
+                log("while True:")
+                try:
+                    page.goto("https://www.instagram.com")
+                    esperarTempo(page, config, parar)
 
-            # Pega o tamanho da viewport (janela visível)
-            viewport = page.viewport_size
-            center_x = viewport["width"] / 2
-            center_y = viewport["height"] / 2        
-            # Move o mouse para o centro da tela
-            page.mouse.move(center_x, center_y)
-            page.wait_for_timeout(1000)  # espera 0.5s para o movimento ser visível
-        
-            page.mouse.wheel(0, 500)     # rola 500px
-            page.wait_for_timeout(1000)
-            page.mouse.wheel(0, 1000)     # rola 500px
-            page.wait_for_timeout(1000)
-            page.mouse.wheel(0, 1000)     # rola 500px
-            page.wait_for_timeout(1000)
-            log("✅ Scroll realizado com o mouse no meio da tela.")
+                    urlAtual = random.choice(urls)
+                    page.goto(urlAtual)
+                    log(f"o perfil visitado: {urlAtual}")
+                    esperarTempo(page, config, parar)
 
-            # Recalcula os botões a cada loop
-            botoes = page.locator("button:has-text('Seguir')")
-            total = botoes.count()
+                    # Abrir /followers/ direto já mostra a lista (não precisa clicar em "seguidores")
+                    page.goto(urlAtual+"followers/")
+                    page.wait_for_selector("div[role='dialog']")
+                    esperarTempo(page, config, parar)
+                except Parado:
+                    raise
+                except Exception as e:
+                    log(f"⚠️ Erro ao abrir o perfil {urlAtual}: {e}")
+                    if not estaLogado(page):
+                        senhaUsuario(page, config["usuario"], config["senha"], parar)
+                    continue
 
-            log(botoes)
-            log(f"first botao: {botoes.first}")
-            log(f"total: {total}")
-            
-            if total == 0:
-                log("if total == 0:")
-                #Pega o tamanho da viewport (janela visível)
-                viewport = page.viewport_size
-                center_x = viewport["width"] / 2
-                center_y = viewport["height"] / 2        
-                 # Move o mouse para o centro da tela  
-                page.mouse.move(center_x, center_y)
-                page.wait_for_timeout(1000)  #   
-                page.mouse.wheel(0, 1000)     # rola 500px
-                page.wait_for_timeout(1000)
-                page.mouse.wheel(0,1000)
-                log("✅ Scroll realizado com o mouse no meio da tela.")
-            
+                log(f"cliques < limite:{cliques}<{limite}")
+                rolarNoMeio(page, [500, 1000, 1000])
+
+                # Recalcula os botões a cada loop
                 botoes = page.locator("button:has-text('Seguir')")
                 total = botoes.count()
-                
-                continue
-            
-          
-            if total > 0 and cliques < limite:
-                contErro =0
+                log(f"total: {total}")
+
+                if total == 0:
+                    log("if total == 0:")
+                    rolarNoMeio(page, [1000, 1000])
+                    continue
+
+                contErro = 0
                 for i in range(total):
                     try:
-                        log("for...try:")  
-                        botao = botoes.nth(i)
-                        botao.scroll_into_view_if_needed()
+                        log("for...try:")
+                        # Depois do clique o botão vira "Seguindo" e sai da lista,
+                        # então o próximo botão "Seguir" é sempre o primeiro (nth(i) pulava botões)
+                        botao = botoes.first
+                        botao.scroll_into_view_if_needed(timeout=5000)
                        # clicou = clicar_com_mouse(page, botao)
-                        botao.click()
+                        botao.click(timeout=5000)
 
                         cliques += 1
                         log(f"botao/total[{i+1}/{total}]")
-                        # pausa para parecer humano (ex.: 5 a 15 segundos)
-                       
-                                                                      
-                        esperarTempo()
-                        
+                        # pausa para parecer humano
+                        esperarTempo(page, config, parar)
+
                         log(f"quantidade de cliques/limite :{cliques}/{limite}")
-                        
-                         # Pega o tamanho da viewport (janela visível)
-                        #viewport = page.viewport_size
-                        #center_x = viewport["width"] / 2
-                        #center_y = viewport["height"] / 2        
-          #  ove o mouse para o centro da tela  
-                        #page.mouse.move(center_x, center_y)
-                        #page.mouse.wheel(0, 100)     # rola 500px
-                        #page.wait_for_timeout(1000)
-                        #print("✅ 001 Scroll realizado com o mouse no meio da tela.")
 
-                       
-
-                        if cliques > limite:
+                        if cliques >= limite:
                             break
 
+                    except Parado:
+                        raise
                     except Exception as e:
-                        log(f"⚠️ Erro ao clicar no botão {i+1}: {e}")  
+                        log(f"⚠️ Erro ao clicar no botão {i+1}: {e}")
                         contErro+=1
                         if contErro>3:
-                            break                     
-                        continue        
-           
-        else:
-            log("⚠️ Limite por hora atingido. Esperando passar 1 hora...") 
-            
-
-            # Espera 1 hora para a próxima execução
-            log("esperando 3600 s") 
+                            break
+                        continue
+        except Parado:
+            pass
+        finally:
             log("\n\n***FIM DO PROGRAMA***\n\n")
-            time.sleep(3600)            
-            cliques =0
-                
-    # Aqui o navegador vai continuar aberto testeeee
-    input("Pressione ENTER para fechar...")
+            browser.close()
+
+
+if __name__ == "__main__":
+    try:
+        executar(CONFIG_PADRAO)
+    except KeyboardInterrupt:
+        pass

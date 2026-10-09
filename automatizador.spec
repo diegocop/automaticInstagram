@@ -2,7 +2,7 @@
 
 
 a = Analysis(
-    ['automatizador.py'],
+    ['interface.py'],
     pathex=[],
     binaries=[],
     datas=[('C:\\Users\\Diego\\AppData\\Local\\ms-playwright', 'ms-playwright')],

@@ -35,6 +35,11 @@ botaoMenu = tk.Button(janela, text="confirmar opcao",command=mostrarOpcoes)
 botaoMenu.pack(pady=5)
 
 
+def soma(a, b):
+    return a + b
+
+x = soma(2, 3)   # ← clique aqui e ponha o breakpoint
+print(x)
 
 
 
