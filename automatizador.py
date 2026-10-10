@@ -301,6 +301,20 @@ def rolarNoMeio(page, distancias):
     log("✅ Scroll realizado com o mouse no meio da tela.")
 
 
+def abrirSeguidores(page):
+    """Clica no contador "X seguidores" do perfil e retorna a caixa que abre"""
+    # O contador é um link com href="#"; o link "Seguido(a) por..." (mutualOnly) é outra lista
+    contador = page.locator("a:has-text('seguidores'):not([href*='mutualOnly'])").first
+    contador.wait_for(timeout=15000)
+    contador.scroll_into_view_if_needed()
+    clicar_com_mouse(page, contador)
+
+    dialogo = page.locator("div[role='dialog']").last
+    dialogo.wait_for(timeout=15000)
+    log("✅ Caixa de seguidores aberta.")
+    return dialogo
+
+
 def executar(config, parar=None):
     """Roda o bot até o usuário apertar "Parar" (parar.set())"""
     parar = parar or threading.Event()
@@ -346,14 +360,12 @@ def executar(config, parar=None):
                     log(f"o perfil visitado: {urlAtual}")
                     esperarTempo(page, config, parar)
 
-                    # Abrir /followers/ direto já mostra a lista (não precisa clicar em "seguidores")
-                    page.goto(urlAtual+"followers/")
-                    page.wait_for_selector("div[role='dialog']")
+                    dialogo = abrirSeguidores(page)
                     esperarTempo(page, config, parar)
                 except Parado:
                     raise
                 except Exception as e:
-                    log(f"⚠️ Erro ao abrir o perfil {urlAtual}: {e}")
+                    log(f"⚠️ Erro ao abrir os seguidores de {urlAtual}: {e}")
                     if not estaLogado(page):
                         senhaUsuario(page, config["usuario"], config["senha"], parar)
                     continue
@@ -361,14 +373,14 @@ def executar(config, parar=None):
                 log(f"cliques < limite:{cliques}<{limite}")
                 rolarNoMeio(page, [500, 1000, 1000])
 
-                # Recalcula os botões a cada loop
-                botoes = page.locator("button:has-text('Seguir')")
+                # Só os botões dentro da caixa de seguidores (não o "Seguir" do próprio perfil)
+                botoes = dialogo.locator("button:has-text('Seguir')")
                 total = botoes.count()
                 log(f"total: {total}")
 
                 if total == 0:
-                    log("if total == 0:")
-                    rolarNoMeio(page, [1000, 1000])
+                    # O Instagram às vezes limita a lista ("Nenhum resultado")
+                    log(f"⚠️ Nenhum botão 'Seguir' nos seguidores de {urlAtual}, indo para outro perfil.")
                     continue
 
                 contErro = 0
