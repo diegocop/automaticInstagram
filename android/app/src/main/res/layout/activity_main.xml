@@ -1,0 +1,253 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#FFFFFF"
+    android:fitsSystemWindows="true"
+    android:orientation="vertical">
+
+    <!-- Abas + status -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="#F2F2F2"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:padding="6dp">
+
+        <Button
+            android:id="@+id/abaConfig"
+            style="?android:attr/buttonBarButtonStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Configurações" />
+
+        <Button
+            android:id="@+id/abaNavegador"
+            style="?android:attr/buttonBarButtonStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Navegador" />
+
+        <TextView
+            android:id="@+id/status"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="end"
+            android:paddingEnd="8dp"
+            android:text="Parado"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/ultimaLinha"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="#F2F2F2"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:paddingHorizontal="12dp"
+        android:paddingBottom="4dp"
+        android:textSize="12sp" />
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <!-- O navegador fica sempre aqui embaixo: o bot continua rodando com a aba de configurações aberta -->
+        <WebView
+            android:id="@+id/navegador"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+
+        <ScrollView
+            android:id="@+id/painelConfig"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="#FFFFFF">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <!-- Conta -->
+                <TextView
+                    style="@style/Titulo"
+                    android:text="Conta do Instagram" />
+
+                <EditText
+                    android:id="@+id/usuario"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="Usuário"
+                    android:inputType="text" />
+
+                <EditText
+                    android:id="@+id/senha"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="Senha"
+                    android:inputType="textPassword" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <CheckBox
+                        android:id="@+id/mostrarSenha"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Mostrar" />
+
+                    <CheckBox
+                        android:id="@+id/lembrarSenha"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:text="Lembrar senha" />
+                </LinearLayout>
+
+                <TextView
+                    style="@style/Dica"
+                    android:text="Deixe em branco para fazer o login manualmente na aba Navegador." />
+
+                <!-- Perfis -->
+                <TextView
+                    style="@style/Titulo"
+                    android:text="Perfis alvo" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Lista:" />
+
+                    <Spinner
+                        android:id="@+id/listas"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <Button
+                        android:id="@+id/novaLista"
+                        style="@style/BotaoPequeno"
+                        android:text="Nova" />
+
+                    <Button
+                        android:id="@+id/renomearLista"
+                        style="@style/BotaoPequeno"
+                        android:text="Renomear" />
+
+                    <Button
+                        android:id="@+id/excluirLista"
+                        style="@style/BotaoPequeno"
+                        android:text="Excluir" />
+
+                    <Button
+                        android:id="@+id/importar"
+                        style="@style/BotaoPequeno"
+                        android:text="Importar" />
+                </LinearLayout>
+
+                <EditText
+                    android:id="@+id/urls"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="monospace"
+                    android:gravity="top"
+                    android:hint="Um por linha: URL, @perfil ou perfil"
+                    android:inputType="textMultiLine|textNoSuggestions"
+                    android:minLines="5"
+                    android:textSize="13sp" />
+
+                <!-- Configurações -->
+                <TextView
+                    style="@style/Titulo"
+                    android:text="Configurações" />
+
+                <GridLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:columnCount="3">
+
+                    <TextView style="@style/Rotulo" android:text="Seguir por ciclo:" />
+                    <EditText android:id="@+id/limite" style="@style/Numero" />
+                    <TextView style="@style/Unidade" android:text="perfis" />
+
+                    <TextView style="@style/Rotulo" android:text="Pausa entre ciclos:" />
+                    <EditText android:id="@+id/pausa" style="@style/Numero" />
+                    <TextView style="@style/Unidade" android:text="minutos" />
+
+                    <TextView style="@style/Rotulo" android:text="Espera mínima:" />
+                    <EditText android:id="@+id/esperaMin" style="@style/Numero" />
+                    <TextView style="@style/Unidade" android:text="segundos" />
+
+                    <TextView style="@style/Rotulo" android:text="Espera máxima:" />
+                    <EditText android:id="@+id/esperaMax" style="@style/Numero" />
+                    <TextView style="@style/Unidade" android:text="segundos" />
+                </GridLayout>
+
+                <!-- Botões -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:orientation="horizontal">
+
+                    <Button
+                        android:id="@+id/iniciar"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="▶ Iniciar" />
+
+                    <Button
+                        android:id="@+id/parar"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:enabled="false"
+                        android:text="■ Parar" />
+
+                    <Button
+                        android:id="@+id/salvar"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Salvar" />
+                </LinearLayout>
+
+                <!-- Log -->
+                <TextView
+                    style="@style/Titulo"
+                    android:text="Log" />
+
+                <TextView
+                    android:id="@+id/log"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="#F7F7F7"
+                    android:fontFamily="monospace"
+                    android:padding="6dp"
+                    android:textIsSelectable="true"
+                    android:textSize="11sp" />
+            </LinearLayout>
+        </ScrollView>
+    </FrameLayout>
+</LinearLayout>
