@@ -17,4 +17,8 @@ O APK sai em `app/build/outputs/apk/release/app-release.apk`.
 
 - Instale o APK no celular (permita "instalar apps de fontes desconhecidas").
 - Para trazer as listas do PC, toque em **Importar** e cole o conteúdo do `config.json`.
-- Deixe o app aberto enquanto ele roda: com o app minimizado ou a tela desligada o Android pausa o navegador.
+- Para rodar com o app minimizado, permita "Sobrepor a outros apps" quando o app pedir: o navegador
+  vai para uma janelinha no canto da tela (arraste para mover, toque para abrir o app) e uma notificação
+  mostra o andamento, com o botão Parar.
+- Tire o app da otimização de bateria. Com a tela desligada o Android para de desenhar a página, então
+  o bot pode falhar até a tela ligar de novo.

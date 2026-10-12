@@ -1,32 +1,33 @@
 package com.diegocop.automatizador
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.AlertDialog
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
+import android.provider.Settings
 import android.text.InputType
 import android.view.View
+import android.view.ViewGroup
 import android.view.WindowManager
-import android.webkit.CookieManager
-import android.webkit.WebResourceRequest
-import android.webkit.WebView
-import android.webkit.WebViewClient
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.CheckBox
 import android.widget.EditText
+import android.widget.FrameLayout
 import android.widget.ScrollView
 import android.widget.Spinner
 import android.widget.TextView
 import org.json.JSONObject
-import java.io.File
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 class MainActivity : Activity() {
-    private lateinit var navegador: WebView
+    private lateinit var navegador: FrameLayout
     private lateinit var painelConfig: ScrollView
     private lateinit var status: TextView
     private lateinit var ultimaLinha: TextView
@@ -44,9 +45,7 @@ class MainActivity : Activity() {
     private lateinit var textoLog: TextView
 
     private lateinit var config: Config
-    private var bot: Bot? = null
     private val linhasLog = ArrayDeque<String>()
-    private val arquivoLog by lazy { File(filesDir, "log.txt") }
 
     // Evita que o Spinner dispare "trocarLista" enquanto o próprio código mexe nele
     private var atualizandoListas = false
@@ -71,8 +70,6 @@ class MainActivity : Activity() {
         botaoIniciar = findViewById(R.id.iniciar)
         botaoParar = findViewById(R.id.parar)
         textoLog = findViewById(R.id.log)
-
-        configurarNavegador()
 
         config = Config.carregar(this)
         mostrarConfig()
@@ -100,24 +97,27 @@ class MainActivity : Activity() {
         }
 
         carregarLog()
+
+        Automacao.aoLogar = { linha, mensagem ->
+            adicionarAoLog(linha)
+            ultimaLinha.text = mensagem.trim()
+        }
+        Automacao.aoTerminar = ::aoTerminar
+        Automacao.aoPedirNavegador = ::mostrarNavegador
+        if (Automacao.rodando) mostrarRodando() else aoTerminar()
     }
 
-    @SuppressLint("SetJavaScriptEnabled")
-    private fun configurarNavegador() {
-        navegador.settings.apply {
-            javaScriptEnabled = true
-            domStorageEnabled = true
-            // Sem o "; wv" o Instagram trata como o Chrome normal do celular
-            userAgentString = userAgentString.replace("; wv", "").replace(Regex("Version/[\\d.]+ "), "")
-        }
-        CookieManager.getInstance().setAcceptCookie(true)
-        CookieManager.getInstance().setAcceptThirdPartyCookies(navegador, true)
-        navegador.webViewClient = object : WebViewClient() {
-            // Links para abrir o app do Instagram (intent://, instagram://) ficam bloqueados
-            override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
-                request.url.scheme !in listOf("http", "https")
-        }
-        navegador.loadUrl("https://www.instagram.com/")
+    override fun onStart() {
+        super.onStart()
+        // Pega o navegador de volta da janela flutuante
+        Automacao.servico?.janela?.esconder()
+        Automacao.mover(this, navegador, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+    }
+
+    override fun onStop() {
+        super.onStop()
+        // App minimizado com o bot rodando: o navegador vai para a janela flutuante
+        if (Automacao.rodando) Automacao.servico?.janela?.mostrar()
     }
 
     private fun mostrarNavegador() {
@@ -277,33 +277,60 @@ class MainActivity : Activity() {
     // ---- Bot ----
     private fun iniciar() {
         if (!salvar(avisar = false)) return
-        val novoBot = Bot(navegador, config, ::log, ::mostrarNavegador)
-        bot = novoBot
-        botaoIniciar.isEnabled = false
-        botaoParar.isEnabled = true
-        status.text = "Rodando"
-        // Com a tela apagada o Android pausa o navegador
-        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        pedirPermissoes { BotService.iniciar(this, config); mostrarRodando() }
+    }
 
-        Thread {
-            try {
-                novoBot.executar()
-            } catch (e: Exception) {
-                log("⚠️ Erro: ${e.message}")
-            } finally {
-                runOnUiThread { aoTerminar() }
+    /** Notificação, janela flutuante e bateria: o que o app precisa para rodar minimizado */
+    private fun pedirPermissoes(continuar: () -> Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
+        }
+        pedirOtimizacaoBateria()
+        if (Settings.canDrawOverlays(this)) {
+            continuar()
+            return
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Rodar com o app minimizado")
+            .setMessage(
+                "Para o bot continuar funcionando enquanto você usa outros apps, permita " +
+                    "\"Sobrepor a outros apps\" (o navegador fica numa janelinha no canto da tela).\n\n" +
+                    "Sem essa permissão o bot só funciona com o app aberto."
+            )
+            .setPositiveButton("Abrir configurações") { _, _ ->
+                startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
             }
-        }.start()
+            .setNegativeButton("Iniciar assim mesmo") { _, _ -> continuar() }
+            .show()
+    }
+
+    /** Pede uma vez para o Android não pausar o app para economizar bateria */
+    @SuppressLint("BatteryLife")
+    private fun pedirOtimizacaoBateria() {
+        val prefs = getSharedPreferences("config", MODE_PRIVATE)
+        val energia = getSystemService(PowerManager::class.java)
+        if (energia.isIgnoringBatteryOptimizations(packageName) || prefs.getBoolean("pediuBateria", false)) return
+        prefs.edit().putBoolean("pediuBateria", true).apply()
+        startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName")))
     }
 
     private fun pararBot() {
-        bot?.parar = true
+        BotService.parar(this)
         botaoParar.isEnabled = false
         status.text = "Parando..."
     }
 
+    private fun mostrarRodando() {
+        botaoIniciar.isEnabled = false
+        botaoParar.isEnabled = true
+        status.text = "Rodando"
+        // Com o app aberto, a tela não apaga enquanto o bot roda
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+    }
+
     private fun aoTerminar() {
-        bot = null
         botaoIniciar.isEnabled = true
         botaoParar.isEnabled = false
         status.text = "Parado"
@@ -311,18 +338,6 @@ class MainActivity : Activity() {
     }
 
     // ---- Log ----
-    /** Grava no log.txt do app e mostra na tela (pode ser chamado da thread do bot) */
-    private fun log(mensagem: String) {
-        // Pega a hora atual no formato: 2025-09-10 14:30:15
-        val agora = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())
-        val linha = "[$agora] $mensagem\n"
-        synchronized(arquivoLog) { arquivoLog.appendText(linha) }
-        runOnUiThread {
-            adicionarAoLog(linha)
-            ultimaLinha.text = mensagem.trim()
-        }
-    }
-
     private fun adicionarAoLog(linha: String) {
         linhasLog.addLast(linha)
         while (linhasLog.size > 300) linhasLog.removeFirst()
@@ -331,6 +346,7 @@ class MainActivity : Activity() {
 
     /** Mostra o final do log das execuções anteriores */
     private fun carregarLog() {
+        val arquivoLog = Automacao.arquivoLog(this)
         if (!arquivoLog.exists()) return
         arquivoLog.readLines().takeLast(100).forEach { linhasLog.addLast("$it\n") }
         textoLog.text = linhasLog.joinToString("")
@@ -349,14 +365,17 @@ class MainActivity : Activity() {
         when {
             painelConfig.visibility != View.VISIBLE -> painelConfig.visibility = View.VISIBLE
             // Com o bot rodando, só esconde o app em vez de fechar
-            bot != null -> moveTaskToBack(true)
+            Automacao.rodando -> moveTaskToBack(true)
             else -> super.onBackPressed()
         }
     }
 
     override fun onDestroy() {
-        bot?.parar = true
-        navegador.destroy()
+        // O bot continua no serviço; só desliga os avisos para esta tela
+        Automacao.aoLogar = null
+        Automacao.aoTerminar = null
+        Automacao.aoPedirNavegador = null
+        Automacao.liberar(applicationContext, navegador)
         super.onDestroy()
     }
 }
