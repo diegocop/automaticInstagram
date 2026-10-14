@@ -315,8 +315,11 @@ def abrirSeguidores(page):
     return dialogo
 
 
-def executar(config, parar=None):
-    """Roda o bot até o usuário apertar "Parar" (parar.set())"""
+def executar(config, parar=None, aoPausar=None, aoRetomar=None, aoSeguir=None):
+    """Roda o bot até o usuário apertar "Parar" (parar.set())
+
+    aoPausar(minutos), aoRetomar() e aoSeguir(total) avisam a interface
+    """
     parar = parar or threading.Event()
     urls = [u.strip().rstrip("/") + "/" for u in config["urls"] if u.strip()]
     if not urls:
@@ -334,6 +337,7 @@ def executar(config, parar=None):
         page = browser.new_page()
         log("\n\n***INÍCIO DO PROGRAMA\n\n***")
         cliques = 0
+        totalCliques = 0   # soma de todos os ciclos desta execução
         urlAtual = ""
 
         try:
@@ -346,7 +350,12 @@ def executar(config, parar=None):
                 # Se atingiu o limite, faz a pausa
                 if cliques >= limite:
                     log(f"⚠️ Limite atingido. Esperando {config['pausaMinutos']} minutos...")
+                    if aoPausar:
+                        aoPausar(config["pausaMinutos"])
                     esperar(page, config["pausaMinutos"] * 60, parar)
+                    if aoRetomar:
+                        aoRetomar()
+                    log("Pausa terminada, começando outro ciclo.")
                     cliques = 0
                     continue
 
@@ -399,7 +408,10 @@ def executar(config, parar=None):
                         # pausa para parecer humano
                         esperarTempo(page, config, parar)
 
-                        log(f"quantidade de cliques/limite :{cliques}/{limite}")
+                        totalCliques += 1
+                        if aoSeguir:
+                            aoSeguir(totalCliques)
+                        log(f"quantidade de cliques/limite :{cliques}/{limite} (total: {totalCliques})")
 
                         if cliques >= limite:
                             break
@@ -415,6 +427,7 @@ def executar(config, parar=None):
         except Parado:
             pass
         finally:
+            log(f"Total de perfis seguidos nesta execução: {totalCliques}")
             log("\n\n***FIM DO PROGRAMA***\n\n")
             browser.close()
 
