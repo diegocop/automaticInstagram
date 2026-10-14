@@ -234,10 +234,47 @@
                         android:text="Salvar" />
                 </LinearLayout>
 
-                <!-- Log -->
-                <TextView
-                    style="@style/Titulo"
-                    android:text="Log" />
+                <!-- Total de todas as execuções -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/totalGeral"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:textStyle="bold" />
+
+                    <Button
+                        android:id="@+id/zerarTotal"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Zerar" />
+                </LinearLayout>
+
+                <!-- Log (as linhas mais recentes ficam em cima) -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        style="@style/Titulo"
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:text="Log" />
+
+                    <Button
+                        android:id="@+id/limparLog"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Limpar" />
+                </LinearLayout>
 
                 <TextView
                     android:id="@+id/log"

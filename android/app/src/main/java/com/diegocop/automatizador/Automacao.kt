@@ -32,6 +32,30 @@ object Automacao {
 
     var servico: BotService? = null
 
+    // Perfis seguidos somando todos os ciclos da execução atual (ou da última)
+    @Volatile
+    var totalCliques = 0
+
+    /** Perfis seguidos somando todas as execuções (fica salvo até apertar "Zerar") */
+    fun totalGeral(context: Context): Int =
+        context.getSharedPreferences("config", Context.MODE_PRIVATE).getInt("totalGeral", 0)
+
+    fun somarTotalGeral(context: Context) {
+        val prefs = context.getSharedPreferences("config", Context.MODE_PRIVATE)
+        synchronized(this) { prefs.edit().putInt("totalGeral", prefs.getInt("totalGeral", 0) + 1).apply() }
+    }
+
+    fun zerarTotalGeral(context: Context) {
+        context.getSharedPreferences("config", Context.MODE_PRIVATE).edit().putInt("totalGeral", 0).apply()
+    }
+
+    // Na pausa entre ciclos a janela flutuante fica fechada
+    @Volatile
+    var pausado = false
+
+    // A tela do app está aparecendo (aí o navegador fica nela, não na janela flutuante)
+    var telaVisivel = false
+
     /** Config que a tela passa para o serviço (inclui a senha mesmo quando ela não é salva) */
     var configPendente: Config? = null
 
@@ -95,6 +119,10 @@ object Automacao {
             aoLogar?.invoke(linha, mensagem)
             servico?.atualizarNotificacao(mensagem.trim())
         }
+    }
+
+    fun limparLog(context: Context) {
+        synchronized(this) { arquivoLog(context).writeText("") }
     }
 
     fun arquivoLog(context: Context) = File(context.filesDir, "log.txt")

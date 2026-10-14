@@ -98,6 +98,9 @@ class Bot(
     private val config: Config,
     private val log: (String) -> Unit,
     private val mostrarNavegador: () -> Unit,
+    private val aoPausar: () -> Unit = {},
+    private val aoRetomar: () -> Unit = {},
+    private val aoSeguir: (total: Int) -> Unit = {},
 ) {
     @Volatile
     var parar = false
@@ -113,6 +116,7 @@ class Bot(
         val limite = config.limite
         log("\n\n***INÍCIO DO PROGRAMA\n\n***")
         var cliques = 0
+        var totalCliques = 0   // soma de todos os ciclos desta execução
         var urlAtual = ""
 
         try {
@@ -125,7 +129,10 @@ class Bot(
                 // Se atingiu o limite, faz a pausa
                 if (cliques >= limite) {
                     log("⚠️ Limite atingido. Esperando ${config.pausaMinutos} minutos...")
+                    aoPausar()
                     esperar(config.pausaMinutos * 60.0)
+                    aoRetomar()
+                    log("Pausa terminada, começando outro ciclo.")
                     cliques = 0
                     continue
                 }
@@ -173,7 +180,9 @@ class Bot(
                             cliques--
                             throw RuntimeException("o clique não teve efeito (o Instagram pode estar limitando a conta)")
                         }
-                        log("quantidade de cliques/limite: $cliques/$limite")
+                        totalCliques++
+                        aoSeguir(totalCliques)
+                        log("quantidade de cliques/limite: $cliques/$limite (total: $totalCliques)")
                         if (cliques >= limite) break
                     } catch (e: Parado) {
                         throw e
@@ -186,6 +195,7 @@ class Bot(
             }
         } catch (_: Parado) {
         } finally {
+            log("Total de perfis seguidos nesta execução: $totalCliques")
             log("\n\n***FIM DO PROGRAMA***\n\n")
         }
     }

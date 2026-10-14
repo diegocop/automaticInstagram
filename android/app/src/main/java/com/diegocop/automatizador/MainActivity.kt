@@ -43,6 +43,7 @@ class MainActivity : Activity() {
     private lateinit var botaoIniciar: Button
     private lateinit var botaoParar: Button
     private lateinit var textoLog: TextView
+    private lateinit var totalGeral: TextView
 
     private lateinit var config: Config
     private val linhasLog = ArrayDeque<String>()
@@ -70,6 +71,7 @@ class MainActivity : Activity() {
         botaoIniciar = findViewById(R.id.iniciar)
         botaoParar = findViewById(R.id.parar)
         textoLog = findViewById(R.id.log)
+        totalGeral = findViewById(R.id.totalGeral)
 
         config = Config.carregar(this)
         mostrarConfig()
@@ -88,6 +90,9 @@ class MainActivity : Activity() {
         findViewById<Button>(R.id.salvar).setOnClickListener { salvar(avisar = true) }
         botaoIniciar.setOnClickListener { iniciar() }
         botaoParar.setOnClickListener { pararBot() }
+        findViewById<Button>(R.id.zerarTotal).setOnClickListener { zerarTotal() }
+        findViewById<Button>(R.id.limparLog).setOnClickListener { limparLog() }
+        mostrarTotalGeral()
         spinnerListas.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(pai: AdapterView<*>?, view: View?, posicao: Int, id: Long) {
                 if (!atualizandoListas) trocarLista(config.listas.keys.elementAt(posicao))
@@ -99,8 +104,10 @@ class MainActivity : Activity() {
         carregarLog()
 
         Automacao.aoLogar = { linha, mensagem ->
+            if (Automacao.rodando && botaoParar.isEnabled) status.text = "Rodando · ${Automacao.totalCliques} seguidos"
             adicionarAoLog(linha)
             ultimaLinha.text = mensagem.trim()
+            mostrarTotalGeral()
         }
         Automacao.aoTerminar = ::aoTerminar
         Automacao.aoPedirNavegador = ::mostrarNavegador
@@ -109,6 +116,7 @@ class MainActivity : Activity() {
 
     override fun onStart() {
         super.onStart()
+        Automacao.telaVisivel = true
         // Pega o navegador de volta da janela flutuante
         Automacao.servico?.janela?.esconder()
         Automacao.mover(this, navegador, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
@@ -116,8 +124,9 @@ class MainActivity : Activity() {
 
     override fun onStop() {
         super.onStop()
+        Automacao.telaVisivel = false
         // App minimizado com o bot rodando: o navegador vai para a janela flutuante
-        if (Automacao.rodando) Automacao.servico?.janela?.mostrar()
+        if (Automacao.rodando && !Automacao.pausado) Automacao.servico?.janela?.mostrar()
     }
 
     private fun mostrarNavegador() {
@@ -325,22 +334,42 @@ class MainActivity : Activity() {
     private fun mostrarRodando() {
         botaoIniciar.isEnabled = false
         botaoParar.isEnabled = true
-        status.text = "Rodando"
+        status.text = "Rodando · ${Automacao.totalCliques} seguidos"
         // Com o app aberto, a tela não apaga enquanto o bot roda
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+    }
+
+    private fun mostrarTotalGeral() {
+        totalGeral.text = "Total seguido (todas as execuções): ${Automacao.totalGeral(this)}"
+    }
+
+    private fun zerarTotal() {
+        AlertDialog.Builder(this)
+            .setTitle("Zerar total")
+            .setMessage("Zerar o total de ${Automacao.totalGeral(this)} perfis seguidos?")
+            .setPositiveButton("Zerar") { _, _ ->
+                Automacao.zerarTotalGeral(this)
+                mostrarTotalGeral()
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
     }
 
     private fun aoTerminar() {
         botaoIniciar.isEnabled = true
         botaoParar.isEnabled = false
-        status.text = "Parado"
+        status.text = if (Automacao.totalCliques > 0) "Parado · ${Automacao.totalCliques} seguidos" else "Parado"
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     }
 
     // ---- Log ----
+    /** As linhas mais recentes ficam em cima */
     private fun adicionarAoLog(linha: String) {
-        linhasLog.addLast(linha)
-        while (linhasLog.size > 300) linhasLog.removeFirst()
+        // Mensagens com quebras de linha ("***FIM DO PROGRAMA***") viram uma linha só
+        val umaLinha = linha.replace(Regex("\\s*\n\\s*"), " ").trim()
+        if (umaLinha.isEmpty()) return
+        linhasLog.addFirst("$umaLinha\n")
+        while (linhasLog.size > 300) linhasLog.removeLast()
         textoLog.text = linhasLog.joinToString("")
     }
 
@@ -348,8 +377,20 @@ class MainActivity : Activity() {
     private fun carregarLog() {
         val arquivoLog = Automacao.arquivoLog(this)
         if (!arquivoLog.exists()) return
-        arquivoLog.readLines().takeLast(100).forEach { linhasLog.addLast("$it\n") }
-        textoLog.text = linhasLog.joinToString("")
+        arquivoLog.readLines().filter { it.isNotBlank() }.takeLast(100).forEach(::adicionarAoLog)
+    }
+
+    private fun limparLog() {
+        AlertDialog.Builder(this)
+            .setTitle("Limpar log")
+            .setMessage("Apagar todo o log?")
+            .setPositiveButton("Limpar") { _, _ ->
+                Automacao.limparLog(this)
+                linhasLog.clear()
+                textoLog.text = ""
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
     }
 
     private fun erro(mensagem: String) {
